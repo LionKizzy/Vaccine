@@ -1,0 +1,109 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: ColdChain Incident Response
+    folder: ColdChain
+    interval: 1m
+    rules:
+
+      # ── Rule 1: Temperature Breach Alert ──────────────────────────────────
+      # Fires when the current shipment temperature exceeds the 25°C threshold.
+      # Targets the shipment_temperature_celsius metric from the exporter.
+      - uid: coldchain-temp-breach
+        title: "UpdateStatus Failure — Temperature Threshold Breached"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "{{ ds_uid }}"
+            model:
+              expr: shipment_temperature_celsius
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 25
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "🚨 Vaccine shipment temperature breach detected"
+          description: >
+            The shipment temperature has exceeded the 25°C safety threshold.
+            The smart contract updateStatus() call has been reverted on-chain.
+            Immediate cold chain intervention required.
+        labels:
+          severity: critical
+          contract: updateStatus
+          chain: sepolia
+
+      # ── Rule 2: 3+ Reverts in 10 Minutes ─────────────────────────────────
+      # Category 6 requirement: alert when 3+ updateStatus failures occur
+      # within a 10-minute window. Uses increase() over the revert counter.
+      - uid: coldchain-revert-storm
+        title: "Incident Response — 3+ UpdateStatus Reverts in 10 Minutes"
+        condition: D
+        data:
+          - refId: B
+            datasourceUid: "{{ ds_uid }}"
+            model:
+              expr: increase(shipment_temperature_celsius[10m])
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+          - refId: D
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 3
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              refId: D
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "⚠️ Revert storm: 3+ UpdateStatus failures in 10 minutes"
+          description: >
+            More than 3 temperature threshold violations have been recorded
+            in the last 10 minutes. This may indicate a sensor malfunction,
+            a compromised logistics route, or a deliberate attack on the
+            cold chain. Review Tenderly traces for each failed transaction.
+        labels:
+          severity: warning
+          contract: updateStatus
+          chain: sepolia

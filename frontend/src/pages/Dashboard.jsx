@@ -1,10 +1,12 @@
-// Dashboard.jsx — Clean light SaaS design, wired chain status
-import React, { useState, useEffect } from 'react';
+// Dashboard.jsx — Wagmi v2 real-time events + red overlay on TemperatureAlert
+import React, { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
+import { useWatchContractEvent, useReadContract } from 'wagmi';
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../wagmi.config.js';
 
-const CONTRACT_ADDRESS = '0x3e9dC908aC6fe66d312de94eD5f543449aC74b69';
+const CONTRACT_ADDRESS_LOCAL = CONTRACT_ADDRESS;
 const RPC_URL = 'https://eth-sepolia.g.alchemy.com/v2/6gMRVFxN5-nYXGgS1z3ew';
-const ABI = ['function shipmentTemperatures(uint256) public view returns (uint256)'];
+const ABI_READ = ['function shipmentTemperatures(uint256) public view returns (uint256)'];
 
 /* ── status config — driven by live temp ── */
 const getStatus = (t, loading, error) => {
@@ -42,16 +44,40 @@ const StatCard = ({ label, value, sub, accent = '#6366f1', icon }) => (
 
 /* ── component ── */
 const Dashboard = () => {
-  const [temp, setTemp]           = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [temp, setTemp]               = useState(null);
+  const [isLoading, setIsLoading]     = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [error, setError]         = useState(null);
+  const [error, setError]             = useState(null);
 
-  const fetchData = async () => {
+  // ── RED OVERLAY state — triggered by TemperatureAlert event ──
+  const [alertOverlay, setAlertOverlay] = useState(null);
+  // alertOverlay = { shipmentId, temperature } | null
+
+  // ── useWatchContractEvent — Category 3 requirement ──
+  // Fires immediately when the contract emits TemperatureAlert, no page refresh needed
+  useWatchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    eventName: 'TemperatureAlert',
+    onLogs(logs) {
+      const latest = logs[logs.length - 1];
+      if (!latest) return;
+      const { shipmentId, temperature } = latest.args;
+      console.log(`[WAGMI EVENT] TemperatureAlert — Shipment #${shipmentId}, Temp: ${temperature}°C`);
+      setAlertOverlay({
+        shipmentId: shipmentId.toString(),
+        temperature: temperature.toString(),
+      });
+      // Also update the displayed temp immediately from the event
+      setTemp(Number(temperature));
+    },
+  });
+
+  const fetchData = useCallback(async () => {
     try {
       setError(null);
       const provider = new ethers.JsonRpcProvider(RPC_URL);
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS_LOCAL, ABI_READ, provider);
       const raw = await contract.shipmentTemperatures(1);
       setTemp(Number(raw));
       setLastUpdated(new Date());
@@ -61,7 +87,7 @@ const Dashboard = () => {
       setError('Unable to reach the contract. Check RPC or network.');
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -80,7 +106,69 @@ const Dashboard = () => {
     : '#22c55e';
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
+
+      {/* ── RED OVERLAY — fires on TemperatureAlert event via useWatchContractEvent ── */}
+      {alertOverlay && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          background: 'rgba(220, 38, 38, 0.92)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '1.5rem',
+          backdropFilter: 'blur(4px)',
+          animation: 'overlayIn 0.25s ease',
+        }}>
+          <div style={{ fontSize: '4rem' }}>🚨</div>
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{ color: '#fff', fontSize: '2rem', fontWeight: 900, letterSpacing: '-0.5px', margin: 0 }}>
+              TEMPERATURE BREACH DETECTED
+            </h2>
+            <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '1.1rem', marginTop: '0.5rem' }}>
+              Shipment #{alertOverlay.shipmentId} — {alertOverlay.temperature}°C recorded on-chain
+            </p>
+            <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              Contract reverted · TemperatureAlert event emitted · Wagmi listener triggered
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button
+              onClick={() => setAlertOverlay(null)}
+              style={{
+                padding: '0.75rem 2rem',
+                background: '#fff',
+                color: '#dc2626',
+                border: 'none',
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                cursor: 'pointer',
+              }}
+            >
+              Dismiss Alert
+            </button>
+            <a
+              href="/audit"
+              style={{
+                padding: '0.75rem 2rem',
+                background: 'rgba(255,255,255,0.15)',
+                color: '#fff',
+                border: '1.5px solid rgba(255,255,255,0.4)',
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                textDecoration: 'none',
+              }}
+            >
+              View Audit Report →
+            </a>
+          </div>
+        </div>
+      )}
       {/* ── Page header ── */}
       <div className="page-header-block">
         <div className="page-title-row">

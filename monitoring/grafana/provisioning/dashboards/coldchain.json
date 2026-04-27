@@ -1,0 +1,112 @@
+{
+  "title": "ColdChain — Vaccine Shipment Monitor",
+  "uid": "coldchain-main",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "gauge",
+      "title": "Current Shipment Temperature",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 0,
+          "max": 50,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "orange", "value": 25 },
+              { "color": "red",    "value": 39 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "shipment_temperature_celsius",
+          "legendFormat": "Shipment #1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Temperature History",
+      "gridPos": { "x": 8, "y": 0, "w": 16, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "orange", "value": 25 },
+              { "color": "red",    "value": 39 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "shipment_temperature_celsius",
+          "legendFormat": "Temperature °C",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Safety Threshold (V1)",
+      "gridPos": { "x": 0, "y": 8, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": { "unit": "celsius", "color": { "mode": "fixed", "fixedColor": "blue" } }
+      },
+      "targets": [
+        { "expr": "25", "legendFormat": "V1 Limit", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Safety Threshold (V2)",
+      "gridPos": { "x": 4, "y": 8, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": { "unit": "celsius", "color": { "mode": "fixed", "fixedColor": "orange" } }
+      },
+      "targets": [
+        { "expr": "39", "legendFormat": "V2 Limit", "refId": "A" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Breach Status",
+      "gridPos": { "x": 8, "y": 8, "w": 8, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "range", "options": { "from": 0,  "to": 25, "result": { "text": "OPTIMAL",  "color": "green"  } } },
+            { "type": "range", "options": { "from": 25, "to": 39, "result": { "text": "WARNING",  "color": "orange" } } },
+            { "type": "range", "options": { "from": 39, "to": 999,"result": { "text": "CRITICAL", "color": "red"    } } }
+          ]
+        }
+      },
+      "targets": [
+        { "expr": "shipment_temperature_celsius", "refId": "A" }
+      ]
+    }
+  ]
+}
